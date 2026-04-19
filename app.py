@@ -2,11 +2,9 @@ from flask import Flask, render_template, request
 from dotenv import load_dotenv
 import os
 import requests as req
-from openai import OpenAI
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 api_key = os.getenv("RAWG_KEY")
-print("API KEY", api_key)
 
 app = Flask(__name__)
 
