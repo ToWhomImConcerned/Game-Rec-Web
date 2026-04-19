@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game Recommender</title>
+    <style>
+        body {
+            font-family: Helvetica, sans-serif;
+            background-color: darkorange;
+            color: black;
+            text-align: center;
+            padding: 30px;
+        }
+        select, input, button {
+            margin: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 6px;
+            border: none;
+        }
+        button {
+            background-color: black;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Game Recommender</h1>
+
+    <form method="POST" action="/recommend">
+        <select name="genre">
+            <option value="">Select Genre</option>
+            <option>Action</option>
+            <option>Adventure</option>
+            <option>Horror</option>
+            <option>Puzzle</option>
+            <option>Role-Playing(RPG)</option>
+            <option>Shooter/FPS</option>
+            <option>Simulation</option>
+            <option>Sports & Racing</option>
+            <option>Strategy</option>
+        </select>
+
+        <select name="platform">
+            <option value="">Select Platform</option>
+            <option>PC</option>
+            <option>Playstation 4</option>
+            <option>Playstation 5</option>
+            <option>Xbox One</option>
+            <option>Nintendo Switch</option>
+        </select>
+
+        <br>
+        <input type="text" name="keyword" placeholder="Optional keyword...">
+        <br>
+        <button type="submit">Search</button>
+    </form>
+    {% if error %}
+    <p style="color:red;">{{ error }}</p>
+{% endif %}
+
+{% if games %}
+    <h2>Here are some games for you!</h2>
+    {% for game in games %}
+        <div style="background:black; color:white; margin:10px auto; padding:15px; width:400px; border-radius:10px;">
+            <h3>{{ game.name }}</h3>
+            <p>Rating: {{ game.rating if game.rating else "Not yet rated" }}</p>
+        </div>
+    {% endfor %}
+{% endif %}
+</body>
+</html>
