@@ -46,6 +46,10 @@ difficulty_map = {
     "Brutal": "hardcore"
 }
 
+def get_ai_explanation(game_name, genre, platform, keyword):
+    keyword_part = f" with a focus on '{keyword}'" if keyword else ""
+    return f"Recommended as a top {genre.lower()} title on {platform}{keyword_part} that matches your search criteria."
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -68,7 +72,16 @@ def recommend():
 
     games = data.get("results", [])[:3]
 
-    return render_template("index.html", games=games)
+    recommendations = []
+    for game in games:
+        explanation = get_ai_explanation(game['name'], genre_selection, platform_selection, keyword)
+        recommendations.append({
+            "name": game['name'],
+            "rating": game.get('rating', 0),
+            "explanation": explanation
+        })
+
+    return render_template("index.html", games=recommendations)
 
 if __name__ == "__main__":
     app.run(debug=True)
