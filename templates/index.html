@@ -66,6 +66,16 @@
                 <h3>{{ game.name }}</h3>
                 <p>Rating: {{ game.rating if game.rating else "Not yet rated" }}</p>
                 <p style="color:orange; font-style:italic;">{{ game.explanation }}</p>
+
+                <form method="POST" action="/played" style="display:inline;">
+                    <input type="hidden" name="game_name" value="{{ game.name }}">
+                    <button type="submit">Mark as Played</button>
+                </form>
+
+                <form method="POST" action="/favorite" style="display:inline;">
+                    <input type="hidden" name="game_name" value="{{ game.name }}">
+                    <button type="submit">{{ "♥" if game.is_favorite else "♡" }}</button>
+                </form>
             </div>
         {% endfor %}
     {% endif %}
