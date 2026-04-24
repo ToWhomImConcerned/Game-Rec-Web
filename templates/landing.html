@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game Recommender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: #111;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .eyebrow {
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            color: #ff7800;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 100px;
+            line-height: 0.95;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        h1 span { color: #ff7800; }
+
+        .subtitle {
+            font-size: 16px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 56px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 32px 24px;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .card:hover {
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(255,120,0,0.4);
+        }
+
+        .card-icon {
+            font-size: 28px;
+            margin-bottom: 16px;
+            display: block;
+            text-align: center;
+        }
+
+        .card-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            letter-spacing: 0.04em;
+            color: #ff7800;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: rgba(255,255,255,0.45);
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .footer-note {
+            margin-top: 40px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+    <p class="eyebrow">Game Recommender</p>
+    <h1>Find Your<br><span>Next Game</span></h1>
+    <p class="subtitle">How can I help you find something to play?</p>
+
+    <form method="POST" action="/choice">
+        <div class="cards">
+            <button class="card" name="path" value="taste" type="submit">
+                <span class="card-icon">🎮</span>
+                <div class="card-title">I know what I like</div>
+                <p class="card-desc">Rate games you've played and we'll find something that fits your taste.</p>
+            </button>
+            <button class="card" name="path" value="new" type="submit">
+                <span class="card-icon">🔍</span>
+                <div class="card-title">Something new</div>
+                <p class="card-desc">Search by genre, platform, and keyword to discover something different.</p>
+            </button>
+        </div>
+    </form>
+
+    <p class="footer-note">Powered by RAWG · Your taste profile saves between sessions</p>
+</body>
+</html>

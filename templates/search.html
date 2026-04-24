@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game Recommender — Search</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: #111;
+            color: #fff;
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .top-nav { width: 100%; max-width: 640px; margin-bottom: 40px; }
+
+        .back-link {
+            font-size: 13px;
+            color: #ff7800;
+            text-decoration: none;
+            letter-spacing: 0.05em;
+        }
+
+        h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 72px;
+            line-height: 0.95;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        h1 span { color: #ff7800; }
+
+        .subtitle {
+            font-size: 14px;
+            color: rgba(255,255,255,0.4);
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .search-form {
+            width: 100%;
+            max-width: 640px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 32px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-wrapper::after {
+            content: '▾';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.4);
+            pointer-events: none;
+            font-size: 14px;
+        }
+
+        select {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            padding: 10px 14px;
+            appearance: none;
+        }
+
+        select option { background: #222; }
+
+        input[type="text"] {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            padding: 10px 14px;
+        }
+
+        input[type="text"]::placeholder { color: rgba(255,255,255,0.3); }
+
+        .search-btn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 12px;
+            background: #ff7800;
+            color: #111;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 20px;
+            letter-spacing: 0.08em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .error {
+            color: #ff4444;
+            font-size: 14px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .results-header {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .game-card {
+            width: 100%;
+            max-width: 520px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .game-name {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            letter-spacing: 0.04em;
+            line-height: 1;
+        }
+
+        .game-rawg-rating {
+            font-size: 13px;
+            color: rgba(255,255,255,0.6);
+            white-space: nowrap;
+        }
+
+        .bottom-section {
+            text-align: center;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            margin: 16px 0;
+        }
+
+        .played-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .btn-played {
+            padding: 8px 20px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .stars {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .star {
+            font-size: 24px;
+            cursor: pointer;
+            color: rgba(255,255,255,0.15);
+            transition: color 0.15s;
+            background: none;
+            border: none;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .star.active { color: #ff7800; }
+
+        .rated-msg {
+            font-size: 12px;
+            color: #ff7800;
+            height: 16px;
+            font-style: italic;
+        }
+
+        .btn-details {
+            padding: 8px 20px;
+            background: rgba(255,120,0,0.1);
+            border: 1px solid rgba(255,120,0,0.2);
+            border-radius: 8px;
+            color: #ff7800;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .more-btn {
+            padding: 10px 28px;
+            background: #ff7800;
+            color: #111;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 16px;
+            letter-spacing: 0.08em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: block;
+            margin: 8px auto 24px;
+        }
+
+        .end-msg {
+            font-size: 13px;
+            color: rgba(255,255,255,0.25);
+            font-style: italic;
+            text-align: center;
+            margin: 8px auto 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a class="back-link" href="/">← Back</a>
+    </div>
+
+    <h1>Something <span>New</span></h1>
+    <p class="subtitle">Search by genre, platform, and keyword</p>
+
+    <div class="search-form">
+        <form method="POST" action="/recommend">
+            <div class="form-row">
+                <div class="select-wrapper">
+                    <select name="genre">
+                        <option value="">Select Genre</option>
+                        <option>Action</option>
+                        <option>Adventure</option>
+                        <option>Horror</option>
+                        <option>Puzzle</option>
+                        <option>Role-Playing(RPG)</option>
+                        <option>Shooter/FPS</option>
+                        <option>Simulation</option>
+                        <option>Sports & Racing</option>
+                        <option>Strategy</option>
+                    </select>
+                </div>
+                <div class="select-wrapper">
+                    <select name="platform">
+                        <option value="">Select Platform</option>
+                        <option>PC</option>
+                        <option>Playstation 4</option>
+                        <option>Playstation 5</option>
+                        <option>Xbox One</option>
+                        <option>Nintendo Switch</option>
+                    </select>
+                </div>
+            </div>
+            <input type="text" name="keyword" placeholder="Optional keyword... (e.g. open world, stealth)">
+            <button class="search-btn" type="submit">Search</button>
+        </form>
+    </div>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    {% if games %}
+        <p class="results-header">Your suggestions</p>
+
+        {% for game in games %}
+            <div class="game-card">
+
+                <!-- SECTION 1: name + rating -->
+                <div class="card-top">
+                    <div class="game-name">{{ game.name }}</div>
+                    <span class="game-rawg-rating">⭐ {{ game.rating if game.rating else "N/A" }}</span>
+                </div>
+
+                <hr class="divider">
+
+                <!-- SECTION 2: more details -->
+                <button class="btn-details" onclick="showDetails({{ loop.index0 }}, {{ game.rawg_id }})">More Details</button>
+
+                <hr class="divider">
+
+                <!-- SECTION 3: already played + stars + mark as played -->
+                <div class="bottom-section">
+                    <p class="played-label">Already played this one? Give it a rating!</p>
+
+                    <form method="POST" action="/rate" id="rate-form-{{ loop.index }}">
+                        <input type="hidden" name="game_name" value="{{ game.name }}">
+                        <input type="hidden" name="rawg_id" value="{{ game.rawg_id }}">
+                        <input type="hidden" name="rating" id="rating-{{ loop.index }}" value="0">
+                        <input type="hidden" name="source" value="new_search">
+                        <div class="stars" id="stars-{{ loop.index }}">
+                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 1)">★</button>
+                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 2)">★</button>
+                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 3)">★</button>
+                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 4)">★</button>
+                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 5)">★</button>
+                        </div>
+                        <p class="rated-msg" id="msg-{{ loop.index }}"></p>
+                    </form>
+
+                    <form method="POST" action="/played">
+                        <input type="hidden" name="game_name" value="{{ game.name }}">
+                        <input type="hidden" name="source" value="new_search">
+                        <button class="btn-played" type="submit">Mark as Played</button>
+                    </form>
+                </div>
+
+            </div>
+        {% endfor %}
+        {% if has_more %}
+            <button class="more-btn" id="more-btn" type="button" onclick="
+                const btn = document.getElementById('more-btn');
+                const scrollPos = btn.getBoundingClientRect().top + window.scrollY;
+                fetch('/more', { method: 'POST' })
+                    .then(res => res.text())
+                    .then(html => {
+                        document.open();
+                        document.write(html);
+                        document.close();
+                        window.scrollTo(0, scrollPos);
+                    });
+            ">More suggestions...</button>
+        {% elif is_end %}
+            <p class="end-msg">That's all for now - experiment with filters and keywords!</p>
+        {% endif %}
+    {% endif %}
+
+    <script>
+        function setRating(cardIndex, n) {
+            document.getElementById(`rating-${cardIndex}`).value = n;
+            document.querySelectorAll(`#stars-${cardIndex} .star`).forEach((s, i) => {
+                s.classList.toggle('active', i < n);
+            });
+            const msg = document.getElementById(`msg-${cardIndex}`);
+            msg.textContent = 'Game rated!';
+            document.getElementById(`rate-form-${cardIndex}`).submit();
+        }
+
+        let activeCard = null;
+
+        function showDetails(cardIndex, rawgId) {
+            const cards = document.querySelectorAll('.game-card');
+            const clickedCard = cards[cardIndex];
+
+            if (activeCard === cardIndex) {
+                closeDetails();
+                return;
+            }
+
+            activeCard = cardIndex;
+
+            const total = cards.length;
+
+            const groupStart = Math.floor(cardIndex / 3) * 3;
+            const groupCards = [];
+            for (let i = groupStart; i < Math.min(groupStart + 3, total); i++) {
+                groupCards.push(cards[i]);
+            }
+
+            const existingRow = document.getElementById('details-row');
+            if (existingRow) {
+                const existingCards = existingRow.querySelectorAll('.game-card');
+                existingCards.forEach(card => {
+                    existingRow.parentNode.insertBefore(card, existingRow);
+                });
+                existingRow.remove();
+            }
+            activeCard = cardIndex;
+
+            const row = document.createElement('div');
+            row.id = 'details-row';
+            row.style.cssText = `
+                display: flex;
+                gap: 16px;
+                width: 100%;
+                max-width: 1060px;
+                margin: 0 auto 16px;
+                align-items: flex-start;
+                justify-content: center;
+            `;
+
+            const leftCol = document.createElement('div');
+            leftCol.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 0px;
+                flex-shrink: 0;
+                width: 520px;
+            `;
+
+            const panel = document.createElement('div');
+            panel.id = 'details-panel';
+            panel.style.cssText = `
+                width: 520px;
+                flex-shrink: 0;
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,120,0,0.3);
+                border-radius: 16px;
+                overflow: hidden;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                box-sizing: border-box;
+            `;
+            panel.innerHTML = `
+                <div style="padding: 40px; text-align: center; color: rgba(255,255,255,0.4); font-style: italic; font-size: 14px;">
+                    Loading...
+                </div>
+            `;
+
+            let totalCardsHeight = 0;
+            groupCards.forEach(card => {
+                totalCardsHeight += card.getBoundingClientRect().height;
+            });
+            totalCardsHeight += (groupCards.length - 1) * 16;
+            console.log('Total cards height:', totalCardsHeight);
+
+            groupCards[0].parentNode.insertBefore(row, groupCards[0]);
+            groupCards.forEach(card => leftCol.appendChild(card));
+            row.appendChild(leftCol);
+            row.appendChild(panel);
+
+            panel.style.height = totalCardsHeight + 'px';
+            panel.style.minHeight = totalCardsHeight + 'px';
+            panel.style.maxHeight = totalCardsHeight + 'px';
+
+            fetch(`/details/${rawgId}`)
+                .then(res => res.json())
+                .then(data => {
+                    const d = data.details;
+
+                    const img = d.background_image
+                        ? `<img src="${d.background_image}" style="width:100%; height:180px; object-fit:cover; display:block;">`
+                        : `<div style="width:100%; height:180px; background:rgba(255,120,0,0.08);"></div>`;
+
+                    const meta = d.metacritic
+                        ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">METACRITIC</div>${d.metacritic}</div>`
+                        : '';
+
+                    const esrb = `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">ESRB</div>${d.esrb}</div>`;
+
+                    const rawg = d.rawg_rating
+                        ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">RAWG</div>${d.rawg_rating} / 5</div>`
+                        : '';
+
+                    const site = d.website
+                        ? `<a href="${d.website}" target="_blank" style="color:#ff7800; font-size:13px; text-decoration:none; display:block; text-align:center; margin-top:16px;">Official Website →</a>`
+                        : '';
+
+                    panel.innerHTML = `
+                        <div style="display:flex; flex-direction:column; min-height:100%;">
+                            ${img}
+                            <div style="padding:20px; text-align:center; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
+
+                                <div style="font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:0.04em; margin-bottom:16px; line-height:1.1;">${d.name}</div>
+
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; text-align:center;">
+                                    <div>
+                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Developer</div>
+                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.developers}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Publisher</div>
+                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.publishers}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Release Date</div>
+                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.released}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Genres</div>
+                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.genres}</div>
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom:16px;">
+                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Platforms</div>
+                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.platforms}</div>
+                                </div>
+
+                                <div style="display:flex; justify-content:center; gap:48px; margin-bottom:16px; flex-wrap:wrap;">
+                                    ${meta}
+                                    ${esrb}
+                                    ${rawg}
+                                </div>
+
+                                <div style="font-size:13px; color:rgba(255,255,255,0.45); line-height:1.7; text-align:left; flex:1; margin-bottom:16px;">${d.description}</div>
+
+                                ${site}
+                            </div>
+                        </div>
+                    `;
+                    requestAnimationFrame(() => {
+                        const leftHeight = leftCol.getBoundingClienttRect().height;
+                        panel.style.height = leftHeight + 'px';
+                        panel.style.maxHeight = leftHeight + 'px';
+                    });
+                });
+
+            setTimeout(() => {
+                document.addEventListener('click', outsideClick);
+            }, 100);
+        }
+
+        function outsideClick(e) {
+            const panel = document.getElementById('details-panel');
+            if (panel && !panel.contains(e.target) && !e.target.closest('.btn-details')) {
+                closeDetails();
+            }
+        }
+
+        function closeDetails() {
+            const row = document.getElementById('details-row');
+            if (row) {
+                const cards = row.querySelectorAll('.game-card');
+                cards.forEach(card => {
+                    row.parentNode.insertBefore(card, row);
+                });
+                row.remove();
+            }
+            activeCard = null;
+            document.removeEventListener('click', outsideClick);
+        }
+    </script>
+</body>
+</html>
