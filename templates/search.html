@@ -327,21 +327,15 @@
                         <input type="hidden" name="rawg_id" value="{{ game.rawg_id }}">
                         <input type="hidden" name="rating" id="rating-{{ loop.index }}" value="0">
                         <input type="hidden" name="source" value="new_search">
-                        <div class="stars" id="stars-{{ loop.index }}">
-                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 1)">★</button>
-                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 2)">★</button>
-                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 3)">★</button>
-                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 4)">★</button>
-                            <button type="button" class="star" onclick="setRating({{ loop.index }}, 5)">★</button>
+                            <button type="button" class="star" onclick="setRating(this, 1)">★</button>
+                            <button type="button" class="star" onclick="setRating(this, 2)">★</button>
+                            <button type="button" class="star" onclick="setRating(this, 3)">★</button>
+                            <button type="button" class="star" onclick="setRating(this, 4)">★</button>
+                            <button type="button" class="star" onclick="setRating(this, 5)">★</button>
                         </div>
                         <p class="rated-msg" id="msg-{{ loop.index }}"></p>
                     </form>
-
-                    <form method="POST" action="/played">
-                        <input type="hidden" name="game_name" value="{{ game.name }}">
-                        <input type="hidden" name="source" value="new_search">
-                        <button class="btn-played" type="submit">Mark as Played</button>
-                    </form>
+                    <button class="btn-played" type="button" onclick="markPlayed(this, '{{ game.name }}', '{{ game.rawg_id }}', 'new_search')">Mark as Played</button>
                 </div>
 
             </div>
@@ -365,201 +359,264 @@
     {% endif %}
 
     <script>
-        function setRating(cardIndex, n) {
-            document.getElementById(`rating-${cardIndex}`).value = n;
-            document.querySelectorAll(`#stars-${cardIndex} .star`).forEach((s, i) => {
-                s.classList.toggle('active', i < n);
+    const cardRatings = new Map();
+
+    function setRating(starEl, n) {
+        const card = starEl.closest('.game-card');
+        const stars = card.querySelectorAll('.star');
+        const form = card.querySelector('form[id^="rate-form"]');
+        const label = card.querySelector('.played-label');
+
+        const gameName = form.querySelector('[name="game_name"]').value;
+        const rawgId = form.querySelector('[name="rawg_id"]').value;
+
+        // Same star clicked again — remove rating
+        if (cardRatings.get(gameName) === n) {
+            cardRatings.delete(gameName);
+            stars.forEach(s => s.classList.remove('active'));
+            label.textContent = 'Already played this one? Give it a rating!';
+            label.style.color = 'rgba(255,255,255,0.35)';
+
+            fetch('/delete_rating', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_name: gameName })
             });
-            const msg = document.getElementById(`msg-${cardIndex}`);
-            msg.textContent = 'Game rated!';
-            document.getElementById(`rate-form-${cardIndex}`).submit();
+            return;
         }
 
-        let activeCard = null;
+        // New or changed rating
+        cardRatings.set(gameName, n);
+        stars.forEach((s, i) => s.classList.toggle('active', i < n));
 
-        function showDetails(cardIndex, rawgId) {
-            const cards = document.querySelectorAll('.game-card');
-            const clickedCard = cards[cardIndex];
-
-            if (activeCard === cardIndex) {
-                closeDetails();
-                return;
+        fetch('/rate_ajax', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_name: gameName, rating: n, rawg_id: rawgId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                label.textContent = 'Rating saved!';
+                label.style.color = '#ff7800';
+            } else {
+                cardRatings.delete(gameName);
+                stars.forEach(s => s.classList.remove('active'));
+                label.textContent = data.error || 'Something went wrong.';
+                label.style.color = 'rgba(255,255,255,0.35)';
             }
+        })
+        .catch(() => {
+            cardRatings.delete(gameName);
+            stars.forEach(s => s.classList.remove('active'));
+            label.textContent = 'Something went wrong.';
+            label.style.color = 'rgba(255,255,255,0.35)';
+        });
+    }
 
-            activeCard = cardIndex;
-
-            const total = cards.length;
-
-            const groupStart = Math.floor(cardIndex / 3) * 3;
-            const groupCards = [];
-            for (let i = groupStart; i < Math.min(groupStart + 3, total); i++) {
-                groupCards.push(cards[i]);
-            }
-
-            const existingRow = document.getElementById('details-row');
-            if (existingRow) {
-                const existingCards = existingRow.querySelectorAll('.game-card');
-                existingCards.forEach(card => {
-                    existingRow.parentNode.insertBefore(card, existingRow);
-                });
-                existingRow.remove();
-            }
-            activeCard = cardIndex;
-
-            const row = document.createElement('div');
-            row.id = 'details-row';
-            row.style.cssText = `
-                display: flex;
-                gap: 16px;
-                width: 100%;
-                max-width: 1060px;
-                margin: 0 auto 16px;
-                align-items: flex-start;
-                justify-content: center;
-            `;
-
-            const leftCol = document.createElement('div');
-            leftCol.style.cssText = `
-                display: flex;
-                flex-direction: column;
-                gap: 0px;
-                flex-shrink: 0;
-                width: 520px;
-            `;
-
-            const panel = document.createElement('div');
-            panel.id = 'details-panel';
-            panel.style.cssText = `
-                width: 520px;
-                flex-shrink: 0;
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,120,0,0.3);
-                border-radius: 16px;
-                overflow: hidden;
-                overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                box-sizing: border-box;
-            `;
-            panel.innerHTML = `
-                <div style="padding: 40px; text-align: center; color: rgba(255,255,255,0.4); font-style: italic; font-size: 14px;">
-                    Loading...
-                </div>
-            `;
-
-            let totalCardsHeight = 0;
-            groupCards.forEach(card => {
-                totalCardsHeight += card.getBoundingClientRect().height;
-            });
-            totalCardsHeight += (groupCards.length - 1) * 16;
-            console.log('Total cards height:', totalCardsHeight);
-
-            groupCards[0].parentNode.insertBefore(row, groupCards[0]);
-            groupCards.forEach(card => leftCol.appendChild(card));
-            row.appendChild(leftCol);
-            row.appendChild(panel);
-
-            panel.style.height = totalCardsHeight + 'px';
-            panel.style.minHeight = totalCardsHeight + 'px';
-            panel.style.maxHeight = totalCardsHeight + 'px';
-
-            fetch(`/details/${rawgId}`)
-                .then(res => res.json())
-                .then(data => {
-                    const d = data.details;
-
-                    const img = d.background_image
-                        ? `<img src="${d.background_image}" style="width:100%; height:180px; object-fit:cover; display:block;">`
-                        : `<div style="width:100%; height:180px; background:rgba(255,120,0,0.08);"></div>`;
-
-                    const meta = d.metacritic
-                        ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">METACRITIC</div>${d.metacritic}</div>`
-                        : '';
-
-                    const esrb = `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">ESRB</div>${d.esrb}</div>`;
-
-                    const rawg = d.rawg_rating
-                        ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">RAWG</div>${d.rawg_rating} / 5</div>`
-                        : '';
-
-                    const site = d.website
-                        ? `<a href="${d.website}" target="_blank" style="color:#ff7800; font-size:13px; text-decoration:none; display:block; text-align:center; margin-top:16px;">Official Website →</a>`
-                        : '';
-
-                    panel.innerHTML = `
-                        <div style="display:flex; flex-direction:column; min-height:100%;">
-                            ${img}
-                            <div style="padding:20px; text-align:center; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
-
-                                <div style="font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:0.04em; margin-bottom:16px; line-height:1.1;">${d.name}</div>
-
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; text-align:center;">
-                                    <div>
-                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Developer</div>
-                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.developers}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Publisher</div>
-                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.publishers}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Release Date</div>
-                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.released}</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Genres</div>
-                                        <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.genres}</div>
-                                    </div>
-                                </div>
-
-                                <div style="margin-bottom:16px;">
-                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Platforms</div>
-                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.platforms}</div>
-                                </div>
-
-                                <div style="display:flex; justify-content:center; gap:48px; margin-bottom:16px; flex-wrap:wrap;">
-                                    ${meta}
-                                    ${esrb}
-                                    ${rawg}
-                                </div>
-
-                                <div style="font-size:13px; color:rgba(255,255,255,0.45); line-height:1.7; text-align:left; flex:1; margin-bottom:16px;">${d.description}</div>
-
-                                ${site}
-                            </div>
-                        </div>
-                    `;
-                    requestAnimationFrame(() => {
-                        const leftHeight = leftCol.getBoundingClienttRect().height;
-                        panel.style.height = leftHeight + 'px';
-                        panel.style.maxHeight = leftHeight + 'px';
+    function markPlayed(btn, gameName, rawgId, source) {
+        fetch('/played_ajax', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_name: gameName, rawg_id: rawgId, source: source })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const card = btn.closest('.game-card');
+                if (data.replacement) {
+                    // swap the card content with the replacement
+                    card.querySelector('.game-name').textContent = data.replacement.name;
+                    card.querySelector('.game-rawg-rating').textContent = `⭐ ${data.replacement.rating || 'N/A'}`;
+                    card.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+                    card.querySelector('.played-label').textContent = 'Already played this one? Give it a rating!';
+                    card.querySelector('.played-label').style.color = 'rgba(255,255,255,0.35)';
+                    // Update the onclick handlers with new game info
+                    card.querySelectorAll('.star').forEach((s, i) => {
+                        s.onclick = () => setRating(s, i + 1);
                     });
-                });
-
-            setTimeout(() => {
-                document.addEventListener('click', outsideClick);
-            }, 100);
-        }
-
-        function outsideClick(e) {
-            const panel = document.getElementById('details-panel');
-            if (panel && !panel.contains(e.target) && !e.target.closest('.btn-details')) {
-                closeDetails();
+                    card.querySelector('.btn-played').onclick = () => markPlayed(card.querySelector('.btn-played'), data.replacement.name, data.replacement.rawg_id, source);
+                    card.querySelectorAll('[name="game_name"]').forEach(el => el.value = data.replacement.name);
+                    card.querySelectorAll('[name="rawg_id"]').forEach(el => el.value = data.replacement.rawg_id);
+                } else {
+                    // no replacement - just remove the card
+                    card.remove();
+                }
             }
+        })
+        .catch(() => console.error('Mark as played failed'));
+    }
+
+    let activeCard = null;
+
+    function showDetails(cardIndex, rawgId) {
+        const cards = document.querySelectorAll('.game-card');
+
+        if (activeCard === cardIndex) {
+            closeDetails();
+            return;
         }
 
-        function closeDetails() {
-            const row = document.getElementById('details-row');
-            if (row) {
-                const cards = row.querySelectorAll('.game-card');
-                cards.forEach(card => {
-                    row.parentNode.insertBefore(card, row);
-                });
-                row.remove();
-            }
-            activeCard = null;
-            document.removeEventListener('click', outsideClick);
+        activeCard = cardIndex;
+        const total = cards.length;
+        const groupStart = Math.floor(cardIndex / 3) * 3;
+        const groupCards = [];
+        for (let i = groupStart; i < Math.min(groupStart + 3, total); i++) {
+            groupCards.push(cards[i]);
         }
-    </script>
+
+        const existingRow = document.getElementById('details-row');
+        if (existingRow) {
+            const existingCards = existingRow.querySelectorAll('.game-card');
+            existingCards.forEach(card => {
+                existingRow.parentNode.insertBefore(card, existingRow);
+            });
+            existingRow.remove();
+        }
+        activeCard = cardIndex;
+
+        const row = document.createElement('div');
+        row.id = 'details-row';
+        row.style.cssText = `
+            display: flex;
+            gap: 16px;
+            width: 100%;
+            max-width: 1060px;
+            margin: 0 auto 16px;
+            align-items: flex-start;
+            justify-content: center;
+        `;
+
+        const leftCol = document.createElement('div');
+        leftCol.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 0px;
+            flex-shrink: 0;
+            width: 520px;
+        `;
+
+        const panel = document.createElement('div');
+        panel.id = 'details-panel';
+        panel.style.cssText = `
+            width: 520px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,120,0,0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        `;
+        panel.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: rgba(255,255,255,0.4); font-style: italic; font-size: 14px;">
+                Loading...
+            </div>
+        `;
+
+        let totalCardsHeight = 0;
+        groupCards.forEach(card => {
+            totalCardsHeight += card.getBoundingClientRect().height;
+        });
+        totalCardsHeight += (groupCards.length - 1) * 16;
+
+        groupCards[0].parentNode.insertBefore(row, groupCards[0]);
+        groupCards.forEach(card => leftCol.appendChild(card));
+        row.appendChild(leftCol);
+        row.appendChild(panel);
+
+        panel.style.height = totalCardsHeight + 'px';
+        panel.style.minHeight = totalCardsHeight + 'px';
+        panel.style.maxHeight = totalCardsHeight + 'px';
+
+        fetch(`/details/${rawgId}`)
+            .then(res => res.json())
+            .then(data => {
+                const d = data.details;
+
+                const img = d.background_image
+                    ? `<img src="${d.background_image}" style="width:100%; height:180px; object-fit:cover; display:block;">`
+                    : `<div style="width:100%; height:180px; background:rgba(255,120,0,0.08);"></div>`;
+
+                const meta = d.metacritic
+                    ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">METACRITIC</div>${d.metacritic}</div>`
+                    : '';
+
+                const esrb = `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">ESRB</div>${d.esrb}</div>`;
+
+                const rawg = d.rawg_rating
+                    ? `<div style="background:rgba(255,120,0,0.15); border:1px solid rgba(255,120,0,0.3); color:#ff7800; padding:6px 12px; border-radius:6px; font-size:12px; text-align:center;"><div style="font-size:10px; opacity:0.7; margin-bottom:2px;">RAWG</div>${d.rawg_rating} / 5</div>`
+                    : '';
+
+                const site = d.website
+                    ? `<a href="${d.website}" target="_blank" style="color:#ff7800; font-size:13px; text-decoration:none; display:block; text-align:center; margin-top:16px;">Official Website →</a>`
+                    : '';
+
+                panel.innerHTML = `
+                    <div style="display:flex; flex-direction:column; min-height:100%;">
+                        ${img}
+                        <div style="padding:20px; text-align:center; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
+                            <div style="font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:0.04em; margin-bottom:16px; line-height:1.1;">${d.name}</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; text-align:center;">
+                                <div>
+                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Developer</div>
+                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.developers}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Publisher</div>
+                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.publishers}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Release Date</div>
+                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.released}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Genres</div>
+                                    <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.genres}</div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:16px;">
+                                <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Platforms</div>
+                                <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.platforms}</div>
+                            </div>
+                            <div style="display:flex; justify-content:center; gap:48px; margin-bottom:16px; flex-wrap:wrap;">
+                                ${meta}
+                                ${esrb}
+                                ${rawg}
+                            </div>
+                            <div style="font-size:13px; color:rgba(255,255,255,0.45); line-height:1.7; text-align:left; flex:1; margin-bottom:16px;">${d.description}</div>
+                            ${site}
+                        </div>
+                    </div>
+                `;
+            });
+
+        setTimeout(() => {
+            document.addEventListener('click', outsideClick);
+        }, 100);
+    }
+
+    function outsideClick(e) {
+        const panel = document.getElementById('details-panel');
+        if (panel && !panel.contains(e.target) && !e.target.closest('.btn-details')) {
+            closeDetails();
+        }
+    }
+
+    function closeDetails() {
+        const row = document.getElementById('details-row');
+        if (row) {
+            const cards = row.querySelectorAll('.game-card');
+            cards.forEach(card => {
+                row.parentNode.insertBefore(card, row);
+            });
+            row.remove();
+        }
+        activeCard = null;
+        document.removeEventListener('click', outsideClick);
+    }
+</script>
 </body>
 </html>

@@ -17,9 +17,9 @@ rating a game from the search menu leaves you in search menu, but add short smal
 crashes on any input in the taste lab add game screen. Type a name, rate it, click rate, crash (FIXED)
 Add a remove from your lab button which when clicked, adds little Xs next to each game for you to remove them from your list (DONE)
 Find my next game button displays 3 games related to your highest rated games on the same page, in the same format as the search page (DONE)
-taste lab add game needs to connect what you typed to an actual game and display the game's official title in the taste profile section
+taste lab add game needs to connect what you typed to an actual game and display the game's official title in the taste profile section (DONE)
 
-stars add the rating to your taste profile correctly, but the stars should stay on screen so it doesn't look like you didn't rate it
+stars add the rating to your taste profile correctly, but the stars should stay on screen so it doesn't look like you didn't rate it (FIXED)
 search button to look the same as find my next game button (smaller, centered)
 add "more suggestions..." button (DONE)
 
@@ -30,6 +30,8 @@ when more details window is open on any game, and a different more details butto
 
 more details box is slightly different size depending on game (FIXED)
 
-when more details is clicked again on the same game it reloads the window with another api call
+when more details is clicked again on the same game it reloads the window with another api call (FIXED)
 
 UPDATE NOTES IN SPECIFIC FILES!!! ADD MORE READABILITY!!!
+
+TO ADD:

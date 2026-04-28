@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from dotenv import load_dotenv
 import os
 import requests as req
@@ -8,7 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 api_key = os.getenv("RAWG_KEY")
 
 app = Flask(__name__)
-app.secret_key = "GameLab"
+app.secret_key = os.getenv('SECRET_KEY')
 details_cache = {}
 search_cache = {}
 
@@ -116,43 +116,126 @@ def taste():
     ratings = get_ratings()
     return render_template("taste.html", ratings=ratings)
 
+@app.route('/validate_game', methods=['POST'])
+def validate_game():
+    body = request.get_json(force=True, silent=True) or {}
+    raw_input = body.get('name', '').strip()
+
+    if not raw_input:
+        return jsonify({'valid': False, 'error': 'Please enter a game title.'})
+
+    url = f"https://api.rawg.io/api/games?key={api_key}&search={raw_input}&page_size=1"
+    resp = req.get(url)
+    rawg_data = resp.json()
+
+    print("STATUS:", resp.status_code)
+    print("RAW_INPUT:", raw_input)
+    print("RAWG RESPONSE:", rawg_data)
+
+    results = rawg_data.get('results', [])
+    if not results:
+        return jsonify({'valid': False, 'error': f'No game found matching "{raw_input}". Try a different title.'})
+
+    top = results[0]
+    top_name = top.get('name', '')
+
+    def significant_words(s):
+        stopwords = {'the', 'a', 'an', 'of', 'and', 'in', 'on', 'at', 'to', 'for', 'is'}
+        return set(w.lower() for w in s.split() if w.lower() not in stopwords and len(w) > 1)
+
+    input_words = significant_words(raw_input)
+    result_words = significant_words(top_name)
+
+    print("INPUT WORDS:", input_words)
+    print("RESULT WORDS:", result_words)
+    print("TOP NAME:", top_name)
+
+    if not input_words.intersection(result_words):
+        return jsonify({'valid': False, 'error': f'No game found matching "{raw_input}". Try a different title.'})
+
+    return jsonify({
+        'valid': True,
+        'name': top_name,
+        'rawg_id': top.get('id', '')
+    })
+
 @app.route("/taste_recommend", methods=["POST"])
 def taste_recommend():
     ratings = get_ratings()
 
     if not ratings:
-        return render_template("taste.html", ratings=ratings, error="Add some rated games first!")
+        return render_template("taste.html", ratings=ratings, error="add some rated games first!")
+    
+    rated_with_id = [(name, score, rawg_id) for name, score, rawg_id in ratings if rawg_id]
 
-    top_games = [(name, score, rawg_id) for name, score, rawg_id in ratings if rawg_id][:3]
-
-    if not top_games:
-        return render_template("taste.html", ratings=ratings, error="Rate some games through search first so we have enough info to go on.")
+    if not rated_with_id:return render_template("taste.html", ratings=ratings, error="Rate some games through search first so we have enough information to go on.")
 
     played = get_played_games()
-    rated_games = {name for name, score, rawg_id in ratings}
-    seen = set()
-    pool = []
+    rated_names = {name for name, score, rawg_id in ratings}
 
-    for name, score, rawg_id in top_games:
+    # build weighted genre + tag maps across ALL rated games
+    genre_weights = {}
+    tag_weights = {}
+
+    for name, score, rawg_id in rated_with_id:
+        # normalize score: 5 = strong positive, 1 = strong negative
+        weight = score - 3 # range: -2 to +2
+
         url = f"https://api.rawg.io/api/games/{rawg_id}?key={api_key}"
         response = req.get(url)
         if response.status_code != 200:
             continue
         data = response.json()
-        genre_pool = set()
+
         for genre in data.get("genres", []):
-            genre_pool.add(genre["slug"])
+            slug = genre["slug"]
+            genre_weights[slug] = genre_weights.get(slug, 0) + weight
 
-        if not genre_pool:
-            continue
+        for tag in data.get("tags", []):
+            # only english tags, skip obscure ones with low game counts
+            if tag.get("language") == "eng" and tag.get("games_count", 0) > 200:
+                slug = tag["slug"]
+                tag_weights[slug] = tag_weights.get(slug, 0) + weight
 
-        genres_param = ",".join(list(genre_pool)[:3])
-        url = f"https://api.rawg.io/api/games?key={api_key}&genres={genres_param}&ordering=-rating&page_size=20&metacritic=80,100"
+    # filter to only positively weighted signals
+    positive_genres = [k for k, v in genre_weights.items() if v > 0]
+    positive_tags = [k for k, v in tag_weights.items() if v > 0]
+
+    # sort by weight, take strongest signals
+    top_genres = sorted(positive_genres, key=lambda k: genre_weights[k], reverse=True)[:5]
+    top_tags = sorted(positive_tags, key=lambda k: tag_weights[k], reverse=True)[:10]
+
+    if not top_genres and not top_tags:
+        return render_template("taste.html", ratings=ratings, error="Couldn't build a taste profile - try rating more games.")
+    
+    seen = set()
+    pool = []
+
+    # query by genres first
+    if top_genres:
+        genres_param = ",".join(top_genres)
+        url = f"https://api.rawg.io/api/games?key={api_key}&genres={genres_param}&ordering=-rating&page_size=42"
         response = req.get(url)
         data = response.json()
 
         for game in data.get("results", []):
-            if game['name'] not in played and game['name'] not in seen and game['name'] not in rated_games:
+            if game['name'] not in played and game['name'] not in seen and game['name'] not in rated_names:
+                seen.add(game['name'])
+                pool.append({
+                    "name": game['name'],
+                    "rating": game.get('rating', 0),
+                    "rawg_id": game.get('id'),
+                })
+
+    # query by tags to suppliment and diversify
+    if top_tags:
+        tags_param = ",".join(top_tags[:5])
+        url = f"https://api.rawg.io/api/games?key={api_key}&tags={tags_param}&ordering=-rating&page_size=42"
+        response = req.get(url)
+        data = response.json()
+
+        for game in data.get("results", []):
+            if game['name'] not in played and game['name'] not in seen and game['name'] not in rated_names:
                 seen.add(game['name'])
                 pool.append({
                     "name": game['name'],
@@ -161,17 +244,19 @@ def taste_recommend():
                 })
 
     if not pool:
-        return render_template("taste.html", ratings=ratings, error="Couldn't find suggestions this time — try rating more games.")
+        return render_template("taste.html", ratings=ratings, error="Couldn't find suggestions this time - try rating more games.")
     
-    pool = pool[:21]
+    # sort final pool by rawg rating so best stuff surfaces first
+    pool.sort(key=lambda g: g['rating'], reverse=True)
+
     session['taste_pool'] = pool
     session['taste_offset'] = 0
 
     displayed = pool[:3]
-    has_more = len(pool) >=6
+    has_more = len(pool) >= 6
     is_end = False
 
-    return render_template("taste.html", ratings=ratings, games=displayed, has_more=has_more, is_end = is_end)
+    return render_template("taste.html", ratings=ratings, games=displayed, has_more=has_more, is_end=is_end)
 
 @app.route("/more_taste", methods=["POST"])
 def more_taste():
@@ -235,7 +320,7 @@ def recommend():
         platform = platform_map.get(platform_selection)
         search_param = f"&search={keyword}" if keyword else ""
 
-        url = f"https://api.rawg.io/api/games?key={api_key}&genres={genre}&platforms={platform}{tags}{search_param}&page_size=21"
+        url = f"https://api.rawg.io/api/games?key={api_key}&genres={genre}&platforms={platform}{tags}{search_param}&page_size=42"
         response = req.get(url)
         data = response.json()
 
@@ -355,6 +440,52 @@ def mark_played():
     
     return redirect(url_for(source))
 
+@app.route("/played_ajax", methods=["POST"])
+def played_ajax():
+    body = request.get_json(force=True, silent=True) or {}
+    game_name = body.get("game_name")
+    source = body.get("source", "new_search")
+
+    add_played_game(game_name)
+
+    if source in ("new_search", "taste"):
+        pool_key = 'search_pool' if source == "new_search" else 'taste_pool'
+        pool = session.get(pool_key, [])
+        pool = [g for g in pool if g['name'] != game_name]
+        session[pool_key] = pool
+
+        results_key = 'last_results' if source == "new_search" else 'taste_pool'
+        games = session.get(results_key, [])
+        games = [g for g in games if g['name'] != game_name]
+
+        replacement = None
+
+        if source == "new_search":
+            last_search = session.get('last_search', {})
+            if last_search and len(games) < 3:
+                played = get_played_games()
+                current_names = [g['name'] for g in games]
+                keyword = last_search['keyword']
+                search_param = f"&search={keyword}" if keyword else ""
+                url = f"https://api.rawg.io/api/games?key={api_key}&genres={last_search['genre']}&platforms={last_search['platform']}{last_search['tags']}{search_param}&page_size=30&ordering=-added"
+                response = req.get(url)
+                data = response.json()
+                for g in data.get("results", []):
+                    if g['name'] not in played and g['name'] not in current_names:
+                        replacement = {
+                            "name": g['name'],
+                            "rating": g.get('rating', 0),
+                            "rawg_id": g['id'],
+                        }
+                        games.append(replacement)
+                        break
+
+        session[results_key] = games
+        return jsonify({"success": True, "replacement": replacement})
+    
+    return jsonify({"success": True, "replacement": None})
+
+
 @app.route("/rate", methods=["POST"])
 def rate_game():
     game_name = request.form.get("game_name")
@@ -383,10 +514,39 @@ def rate_game():
     
     return redirect(url_for("taste"))
 
+@app.route("/rate_ajax", methods=["POST"])
+def rate_ajax():
+    body = request.get_json(force=True, silent=True) or {}
+    game_name = body.get("game_name")
+    rating = body.get("rating", 0)
+    rawg_id = body.get("rawg_id")
+
+    if not rating or int(rating) == 0:
+        return jsonify({"success": False, "error": "Please select a star rating first."})
+    
+    if not rawg_id:
+        search_url = f"https://api.rawg.io/api/games?key={api_key}&search={game_name}&page_size=1"
+        response = req.get(search_url)
+        data = response.json()
+        results = data.get("results", [])
+        if results:
+            rawg_id = results[0]["id"]
+
+    add_or_update_rating(game_name, int(rating), rawg_id if rawg_id else None)
+    return jsonify({"success": True})
+
 @app.route("/delete_rating", methods=["POST"])
 def remove_rating():
-    game_name = request.form.get("game_name")
+    # handle both form and json requests
+    if request.is_json:
+        game_name = (request.get_json(force=True, silent=True) or {}).get("game_name")
+    else:
+        game_name = request.form.get("game_name")
+
     delete_rating(game_name)
+
+    if request.is_json:
+        return jsonify({"success": True})
     return redirect(url_for("taste"))
 
 if __name__ == "__main__":

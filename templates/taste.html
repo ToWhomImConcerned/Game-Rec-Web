@@ -73,7 +73,7 @@
         }
 
         .btn-details {
-            padding: 8px 24px;
+            padding: 8px 20px;
             background: rgba(255,120,0,0.1);
             border: 1px solid rgba(255,120,0,0.2);
             border-radius: 8px;
@@ -340,9 +340,10 @@
                     <button type="button" class="star" onclick="setAddRating(5)">★</button>
                 </div>
                 <input type="hidden" name="rating" id="rating-value" value="0">
-                <button class="add-btn" type="submit">Add</button>
+                <button class="add-btn" type="button" onclick="handleAdd()">Add</button>
             </div>
         </form>
+        <p id="add-error" style="color:#ff4444; font-size:13px; margin-top:10px; text-align: center; min-height:18px;"></p>
     </div>
 
     <!-- TASTE PROFILE -->
@@ -405,21 +406,15 @@
                             <input type="hidden" name="rawg_id" value="{{ game.rawg_id if game.rawg_id else '' }}">
                             <input type="hidden" name="rating" id="rating-{{ loop.index }}" value="0">
                             <input type="hidden" name="source" value="taste">
-                            <div class="stars" id="stars-{{ loop.index }}">
-                                <button type="button" class="star" onclick="setRating({{ loop.index }}, 1)">★</button>
-                                <button type="button" class="star" onclick="setRating({{ loop.index }}, 2)">★</button>
-                                <button type="button" class="star" onclick="setRating({{ loop.index }}, 3)">★</button>
-                                <button type="button" class="star" onclick="setRating({{ loop.index }}, 4)">★</button>
-                                <button type="button" class="star" onclick="setRating({{ loop.index }}, 5)">★</button>
+                                <button type="button" class="star" onclick="setRating(this, 1)">★</button>
+                                <button type="button" class="star" onclick="setRating(this, 2)">★</button>
+                                <button type="button" class="star" onclick="setRating(this, 3)">★</button>
+                                <button type="button" class="star" onclick="setRating(this, 4)">★</button>
+                                <button type="button" class="star" onclick="setRating(this, 5)">★</button>
                             </div>
                             <p class="rated-msg" id="msg-{{ loop.index }}"></p>
                         </form>
-
-                        <form method="POST" action="/played">
-                            <input type="hidden" name="game_name" value="{{ game.name }}">
-                            <input type="hidden" name="source" value="taste">
-                            <button class="btn-played" type="submit">Mark as Played</button>
-                        </form>
+                        <botton class="btn-played" type="button" onclick="markPlayed(this, '{{ game.name }}', '{{ game.rawg_id }}', 'taste')">Mark as Played</botton>
                     </div>
 
                 </div>
@@ -433,21 +428,205 @@
     {% endif %}
 
     <script>
-        function setRating(cardIndex, n) {
-            document.getElementById(`rating-${cardIndex}`).value = n;
-            document.querySelectorAll(`#stars-${cardIndex} .star`).forEach((s, i) => {
+        // ── ADD GAME ──────────────────────────────────────────────
+        function setAddRating(n) {
+            document.getElementById('rating-value').value = n;
+            document.querySelectorAll('#stars .star').forEach((s, i) => {
                 s.classList.toggle('active', i < n);
             });
-            const msg = document.getElementById(`msg-${cardIndex}`);
-            msg.textContent = 'Game rated!';
-            document.getElementById(`rate-form-${cardIndex}`).submit();
         }
 
+        function handleAdd() {
+            const input = document.getElementById('game-input');
+            const errorEl = document.getElementById('add-error');
+            const rawName = input.value.trim();
+
+            errorEl.textContent = '';
+
+            if (!rawName) {
+                errorEl.textContent = 'Please enter a valid game title.';
+                return;
+            }
+
+            fetch('/validate_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: rawName })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.valid) {
+                    let hiddenId = document.getElementById('rawg-id-hidden');
+                    if (!hiddenId) {
+                        hiddenId = document.createElement('input');
+                        hiddenId.type = 'hidden';
+                        hiddenId.name = 'rawg_id';
+                        hiddenId.id = 'rawg-id-hidden';
+                        input.closest('form').appendChild(hiddenId);
+                    }
+                    hiddenId.value = data.rawg_id;
+                    input.closest('form').submit();
+                } else {
+                    errorEl.textContent = data.error;
+                }
+            })
+            .catch(() => {
+                errorEl.textContent = 'Something went wrong. Try again.';
+            });
+        }
+
+        // ── AUTOCOMPLETE ──────────────────────────────────────────
+        const input = document.getElementById('game-input');
+        const suggestions = document.getElementById('suggestions');
+        let debounceTimer;
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const query = input.value.trim();
+
+            if (query.length < 3) {
+                suggestions.style.display = 'none';
+                return;
+            }
+
+            debounceTimer = setTimeout(() => {
+                fetch(`/autocomplete?q=${encodeURIComponent(query)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        suggestions.innerHTML = '';
+                        if (data.results.length === 0) {
+                            suggestions.style.display = 'none';
+                            return;
+                        }
+                        data.results.forEach(name => {
+                            const item = document.createElement('div');
+                            item.textContent = name;
+                            item.style.cssText = `
+                                padding: 10px 14px;
+                                font-size: 14px;
+                                cursor: pointer;
+                                color: rgba(255,255,255,0.8);
+                                border-bottom: 1px solid rgba(255,255,255,0.05);
+                            `;
+                            item.addEventListener('mouseenter', () => {
+                                item.style.background = 'rgba(255,120,0,0.15)';
+                                item.style.color = '#ff7800';
+                            });
+                            item.addEventListener('mouseleave', () => {
+                                item.style.background = 'none';
+                                item.style.color = 'rgba(255,255,255,0.8)';
+                            });
+                            item.addEventListener('click', () => {
+                                input.value = name;
+                                suggestions.style.display = 'none';
+                            });
+                            suggestions.appendChild(item);
+                        });
+                        suggestions.style.display = 'block';
+                    });
+            }, 300);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!suggestions.contains(e.target) && e.target !== input) {
+                suggestions.style.display = 'none';
+            }
+        });
+
+        function markPlayed(btn, gameName, rawgId, source) {
+            fetch('/played_ajax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_name: gameName, rawg_id: rawgId, source: source })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const card = btn.closest('.game-card');
+                    if (data.replacement) {
+                        // swap the card content with the replacement
+                        card.querySelector('.game-name').textContent = data.replacement.name;
+                        card.querySelector('.game-rawg-rating').textContent = `⭐ ${data.replacement.rating || 'N/A'}`;
+                        card.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+                        card.querySelector('.played-label').textContent = 'Already played this one? Give it a rating!';
+                        card.querySelector('.played-label').style.color = 'rgba(255,255,255,0.35)';
+                        // Update the onclick handlers with new game info
+                        card.querySelectorAll('.star').forEach((s, i) => {
+                            s.onclick = () => setRating(s, i + 1);
+                        });
+                        card.querySelector('.btn-played').onclick = () => markPlayed(card.querySelector('.btn-played'), data.replacement.name, data.replacement.rawg_id, source);
+                        card.querySelectorAll('[name="game_name"]').forEach(el => el.value = data.replacement.name);
+                        card.querySelectorAll('[name="rawg_id"]').forEach(el => el.value = data.replacement.rawg_id);
+                    } else {
+                        // no replacement - just remove the card
+                        card.remove();
+                    }
+                }
+            })
+            .catch(() => console.error('Mark as played failed'));
+        }
+
+        // ── SUGGESTION CARD RATING ────────────────────────────────
+        const cardRatings = new Map();
+
+        function setRating(starEl, n) {
+            const card = starEl.closest('.game-card');
+            const stars = card.querySelectorAll('.star');
+            const form = card.querySelector('form[id^="rate-form"]');
+            const label = card.querySelector('.played-label');
+
+            const gameName = form.querySelector('[name="game_name"]').value;
+            const rawgId = form.querySelector('[name="rawg_id"]').value;
+
+            // Same star clicked again — remove rating
+            if (cardRatings.get(gameName) === n) {
+                cardRatings.delete(gameName);
+                stars.forEach(s => s.classList.remove('active'));
+                label.textContent = 'Already played this one? Give it a rating!';
+                label.style.color = 'rgba(255,255,255,0.35)';
+
+                fetch('/delete_rating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game_name: gameName })
+                });
+                return;
+            }
+
+            // New or changed rating
+            cardRatings.set(gameName, n);
+            stars.forEach((s, i) => s.classList.toggle('active', i < n));
+
+            fetch('/rate_ajax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_name: gameName, rating: n, rawg_id: rawgId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    label.textContent = 'Rating saved!';
+                    label.style.color = '#ff7800';
+                } else {
+                    cardRatings.delete(gameName);
+                    stars.forEach(s => s.classList.remove('active'));
+                    label.textContent = data.error || 'Something went wrong.';
+                    label.style.color = 'rgba(255,255,255,0.35)';
+                }
+            })
+            .catch(() => {
+                cardRatings.delete(gameName);
+                stars.forEach(s => s.classList.remove('active'));
+                label.textContent = 'Something went wrong.';
+                label.style.color = 'rgba(255,255,255,0.35)';
+            });
+        }
+
+        // ── DETAILS PANEL ─────────────────────────────────────────
         let activeCard = null;
 
         function showDetails(cardIndex, rawgId) {
             const cards = document.querySelectorAll('.game-card');
-            const clickedCard = cards[cardIndex];
 
             if (activeCard === cardIndex) {
                 closeDetails();
@@ -455,9 +634,7 @@
             }
 
             activeCard = cardIndex;
-
             const total = cards.length;
-
             const groupStart = Math.floor(cardIndex / 3) * 3;
             const groupCards = [];
             for (let i = groupStart; i < Math.min(groupStart + 3, total); i++) {
@@ -520,7 +697,6 @@
                 totalCardsHeight += card.getBoundingClientRect().height;
             });
             totalCardsHeight += (groupCards.length - 1) * 16;
-            console.log('Total cards height:', totalCardsHeight);
 
             groupCards[0].parentNode.insertBefore(row, groupCards[0]);
             groupCards.forEach(card => leftCol.appendChild(card));
@@ -558,9 +734,7 @@
                         <div style="display:flex; flex-direction:column; min-height:100%;">
                             ${img}
                             <div style="padding:20px; text-align:center; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
-
                                 <div style="font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:0.04em; margin-bottom:16px; line-height:1.1;">${d.name}</div>
-
                                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; text-align:center;">
                                     <div>
                                         <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Developer</div>
@@ -579,29 +753,20 @@
                                         <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.genres}</div>
                                     </div>
                                 </div>
-
                                 <div style="margin-bottom:16px;">
                                     <div style="font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px;">Platforms</div>
                                     <div style="font-size:13px; color:rgba(255,255,255,0.8);">${d.platforms}</div>
                                 </div>
-
                                 <div style="display:flex; justify-content:center; gap:48px; margin-bottom:16px; flex-wrap:wrap;">
                                     ${meta}
                                     ${esrb}
                                     ${rawg}
                                 </div>
-
                                 <div style="font-size:13px; color:rgba(255,255,255,0.45); line-height:1.7; text-align:left; flex:1; margin-bottom:16px;">${d.description}</div>
-
                                 ${site}
                             </div>
                         </div>
                     `;
-                    requestAnimationFrame(() => {
-                        const leftHeight = leftCol.getBoundingClienttRect().height;
-                        panel.style.height = leftHeight + 'px';
-                        panel.style.maxHeight = leftHeight + 'px';
-                    });
                 });
 
             setTimeout(() => {
@@ -628,101 +793,21 @@
             activeCard = null;
             document.removeEventListener('click', outsideClick);
         }
-    </script>
-<script>
-    function setRating(cardIndex, n) {
-        document.getElementById(`rating-${cardIndex}`).value = n;
-        document.querySelectorAll(`#stars-${cardIndex} .star`).forEach((s, i) => {
-            s.classList.toggle('active', i < n);
-        });
-        const msg = document.getElementById(`msg-${cardIndex}`);
-        if (msg) {
-            msg.textContent = 'Game rated!';
-            document.getElementById(`rate-form-${cardIndex}`).submit();
-        }
-    }
 
-    function setAddRating(n) {
-        document.getElementById('rating-value').value = n;
-        document.querySelectorAll('#stars .star').forEach((s, i) => {
-            s.classList.toggle('active', i < n);
-        });
-    }
+        // ── LOAD MORE ─────────────────────────────────────────────
+        function loadMore() {
+            const btn = document.getElementById('more-btn');
+            const scrollPos = btn.getBoundingClientRect().top + window.scrollY;
 
-    function loadMore() {
-        const btn = document.getElementById('more-btn');
-        const scrollPos = btn.getBoundingClientRect().top + window.scrollY;
-        
-        fetch('/more_taste', { method: 'POST' })
-            .then(res => res.text())
-            .then(html => {
-                document.open();
-                document.write(html);
-                document.close();
-                window.scrollTo(0, scrollPos);
-            });
-    }
-</script>
-<script>
-    const input = document.getElementById('game-input');
-    const suggestions = document.getElementById('suggestions');
-    let debounceTimer;
-
-    input.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        const query = input.value.trim();
-
-        if (query.length < 3) {
-            suggestions.style.display = 'none';
-            return;
-        }
-
-        debounceTimer = setTimeout(() => {
-            fetch(`/autocomplete?q=${encodeURIComponent(query)}`)
-                .then(res => res.json())
-                .then(data => {
-                    suggestions.innerHTML = '';
-
-                    if (data.results.length === 0) {
-                        suggestions.style.display = 'none';
-                        return;
-                    }
-
-                    data.results.forEach(name => {
-                        const item = document.createElement('div');
-                        item.textContent = name;
-                        item.style.cssText = `
-                            padding: 10px 14px;
-                            font-size: 14px;
-                            cursor: pointer;
-                            color: rgba(255,255,255,0.8);
-                            border-bottom: 1px solid rgba(255,255,255,0.05);
-                        `;
-                        item.addEventListener('mouseenter', () => {
-                            item.style.background = 'rgba(255,120,0,0.15)';
-                            item.style.color = '#ff7800';
-                        });
-                        item.addEventListener('mouseleave', () => {
-                            item.style.background = 'none';
-                            item.style.color = 'rgba(255,255,255,0.8)';
-                        });
-                        item.addEventListener('click', () => {
-                            input.value = name;
-                            suggestions.style.display = 'none';
-                        });
-                        suggestions.appendChild(item);
-                    });
-
-                    suggestions.style.display = 'block';
+            fetch('/more_taste', { method: 'POST' })
+                .then(res => res.text())
+                .then(html => {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                    window.scrollTo(0, scrollPos);
                 });
-        }, 300);
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!suggestions.contains(e.target) && e.target !== input) {
-            suggestions.style.display = 'none';
         }
-    });
-</script>
+    </script>
 </body>
 </html>
